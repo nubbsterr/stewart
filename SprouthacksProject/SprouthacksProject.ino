@@ -1,4 +1,6 @@
 /* TO-DO:
+ * speed map w/ PID: -350 to +350
+ * map PID to take role as ENA/motor speed for analogWrite in each drive function
  * calibrate gy521, also set logic for PID # to go back/forwards in loop, get pitch value to find where negative and positive
  * pitch deck for project can be ultra shrimple; show project purpose, design, issues in development, etc.
 */
@@ -9,17 +11,15 @@
 /* PID and Accelerometer
  * INT, SCL, SDA are all handled by GY521.h lib. Pinout is predefined w/ macros in lib header. */
 GY521 mpu(0x68);                        // Create sensor object for GY521 lib interface
-const int Kp { 0 };                     // Proportional-Gain constant for PID
-const int Ki { 0 };                     // Integral-Gain constant for PID
-const int Kd { 0 };                     // Derivative-Gain constant for PID
+const int Kp { 2 };                     // Proportional-Gain constant for PID
+const int Ki { 1 };                     // Integral-Gain constant for PID
+const int Kd { 1 };                     // Derivative-Gain constant for PID
 int pid_I { 0 };                        // Integral value for PID, global to get integral total
 int error { 0 };                        // Error = SP - PV, manipulate output to get closer to SP
 int previous_error { 0 };               // Used for Derivative calculation
 const float targetAngle { 0 };          // Set Point (SP), aligned upwards against the normal
 float pitchAngle { 0 };                 // Process Value (VP), Y-axis angle 
-const float radsToDegrees { 180/M_PI }; // Convert radian measure of accelerometer to degrees
-
-float yawAngle { 0 };   // X-axis angle
+float yawAngle { 0 };                   // X-axis angle
 
 // LN298
 #define IN1 26
@@ -32,27 +32,30 @@ float program_time { 0 };  // Ellapsed time in millisceonds from program start
 float previous_time { 0 }; 
 float cycle_time { 0 };    // Cycle time taken to complete PID calculation
 
+// all OUT set to Low
 void driveStop()
 {
-  // all OUT set to Low
   digitalWrite(IN1, LOW); 
   digitalWrite(IN2, LOW);
 }
 
-void driveBackward()
+// Drive both motors counterclockwise
+void driveBackwards(motorSpeed)
 {
-  // drive both motors counterclockwise
+  analogWRite(ENA, motorSpeed);
   digitalWrite(IN1, LOW);
   digitalWrite(IN2, HIGH);
 }
 
-void driveForward()
+// Drive both motors clockwise
+void driveForward(motorSpeed)
 {
-  // drive both motors clockwise
+  analogWrite(ENA, motorSpeed);
   digitalWrite(IN1, HIGH);
   digitalWrite(IN2, LOW);
 }
 
+// Start I2C connection and calibrate MPU
 void setup() {
   Serial.begin(115200); // 115200 baud rate
 
@@ -60,42 +63,38 @@ void setup() {
   pinMode(IN2, OUTPUT);
   pinMode(ENA, OUTPUT);
 
-  digitalWrite(ENA, ena_speed);
-
-  // Start I2C Wire connection to wake MPU then check if MPU is awake before start
   Wire.begin();
   if (mpu.wakeup() == false)
   {
     Serial.println("MPU is asleep after I2C Start--Angles will not be read from sensor. (0x68 ADDR)");
   }
 
-  // Set sensor sensitivity and calibrate
+  // Set sensor sensitivity, calibrate MPU and normalize angle return
   mpu.setAccelSensitivity(2);    // 8g of force max
   mpu.setGyroSensitivity(1);     // 500 degreees/second max
-  mpu.setNormalize(true);        // Normalize angle measurements
-  mpu.calibrate(20);             // 20 reads on MPU to calibrate angles to 0
+  mpu.setNormalize(true);        
+  mpu.calibrate(20);             
 }
 
+// Calculate PID using linear models since exponential is too hard/process demanding
 int calculatePID()
 {
-  // Linear models since exponential is too hard/process demanding
-
   // P controlled by error, error is proportional to correction, provide quick correction to SP
   int pid_P = Kp*error;
 
-  /* I controlled by total error over time, improves stability but must be fine tuned more than P/D. Has greater effect on PID over time,
-  Calculated by multiplying Kp by error and cycle time/time of how often PID is calculated, then take summation of integrals to get integral total */
-
+  /* I controlled by total error over time, improves stability but must be fine tuned more than P/D. 
+   * Has greater effect on PID over time, */
   pid_I = (Ki*error) + pid_I;
 
-  /* D controlled by rate of change of error, aims to predict change of process value to correct movement, prevent overshooting.
-  Biases output to prevent PV from overshooting SP */
+  /* D controlled by rate of change of error, aims to predict change of process value to correct movement, 
+   * biases output to prevent overcorrection */
   int pid_D = Kd*((error-previous_error) / cycle_time);
 
   int pid = pid_P + pid_I + pid_D;
   return pid;
 }
 
+// Get angles from GY521 using lib
 void getAngle()
 {
   // Read data from sensor w/ read() then get XYZ-angles, only pitch angle is needed for PID
@@ -104,6 +103,7 @@ void getAngle()
   yawAngle = mpu.getAngleX();
 }
 
+// Calculate cycle time and continously get angles, calculate error and PID, and manage movement
 void loop() 
 {
   previous_time = program_time; // last recorded time
@@ -112,12 +112,23 @@ void loop()
 
   getAngle();
   error = targetAngle - pitchAngle; 
-  previous_error = error;     
+  previous_error = error;
+  int pid { calculatePID() };
 
+  // Map ena_speed based on PID threshold from -350 to +350 to 0-255 range for analog
+  ena_speed = map(pid, -350, 350, 0, 255); 
 
-  Serial.print("Angle Y reading | "); Serial.println(pitchAngle);
-  Serial.print("Angle X reading | "); Serial.println(yawAngle);
+  // Debugging yuh
+  Serial.print("Angle Y reading \t"); Serial.println(pitchAngle);
+  Serial.print("Angle X reading \t"); Serial.println(yawAngle);
+  Serial.print("PID \t"); Serial.println(pid);
 
-  Serial.print("Ellapsed Time (s): "); Serial.println(program_time/1000);
-  delay(1000);
+  Serial.print("Ellapsed Time (s) \t"); Serial.println(program_time/1000);
+
+  // Control robot movement based on PID
+  if (pid < -5) driveForward(ena_speed); 
+  else if (pid > 5) driveBackwards(ena_speed);
+  else halt();
+
+  delay(200);
 }
