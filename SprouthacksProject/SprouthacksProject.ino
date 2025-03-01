@@ -1,7 +1,6 @@
 /* TO-DO:
+ * tune PID to lessen overcorrection by robot
  * speed map w/ PID: -350 to +350
- * map PID to take role as ENA/motor speed for analogWrite in each drive function
- * calibrate gy521, also set logic for PID # to go back/forwards in loop, get pitch value to find where negative and positive
  * pitch deck for project can be ultra shrimple; show project purpose, design, issues in development, etc.
 */
 
@@ -11,9 +10,9 @@
 /* PID and Accelerometer
  * INT, SCL, SDA are all handled by GY521.h lib. Pinout is predefined w/ macros in lib header. */
 GY521 mpu(0x68);                        // Create sensor object for GY521 lib interface
-const int Kp { 2 };                     // Proportional-Gain constant for PID
-const int Ki { 1 };                     // Integral-Gain constant for PID
-const int Kd { 1 };                     // Derivative-Gain constant for PID
+const float Kp { 25 };                  // Proportional-Gain constant for PID
+const float Ki { 1 };                   // Integral-Gain constant for PID
+const float Kd { 0.00001 };             // Derivative-Gain constant for PID
 int pid_I { 0 };                        // Integral value for PID, global to get integral total
 int error { 0 };                        // Error = SP - PV, manipulate output to get closer to SP
 int previous_error { 0 };               // Used for Derivative calculation
@@ -33,22 +32,22 @@ float previous_time { 0 };
 float cycle_time { 0 };    // Cycle time taken to complete PID calculation
 
 // all OUT set to Low
-void driveStop()
+void halt()
 {
   digitalWrite(IN1, LOW); 
   digitalWrite(IN2, LOW);
 }
 
 // Drive both motors counterclockwise
-void driveBackwards(motorSpeed)
+void driveBackwards(int motorSpeed)
 {
-  analogWRite(ENA, motorSpeed);
+  analogWrite(ENA, motorSpeed);
   digitalWrite(IN1, LOW);
   digitalWrite(IN2, HIGH);
 }
 
 // Drive both motors clockwise
-void driveForward(motorSpeed)
+void driveForward(int motorSpeed)
 {
   analogWrite(ENA, motorSpeed);
   digitalWrite(IN1, HIGH);
@@ -77,10 +76,10 @@ void setup() {
 }
 
 // Calculate PID using linear models since exponential is too hard/process demanding
-int calculatePID()
+float calculatePID()
 {
   // P controlled by error, error is proportional to correction, provide quick correction to SP
-  int pid_P = Kp*error;
+  float pid_P = Kp*error;
 
   /* I controlled by total error over time, improves stability but must be fine tuned more than P/D. 
    * Has greater effect on PID over time, */
@@ -88,9 +87,9 @@ int calculatePID()
 
   /* D controlled by rate of change of error, aims to predict change of process value to correct movement, 
    * biases output to prevent overcorrection */
-  int pid_D = Kd*((error-previous_error) / cycle_time);
+  float pid_D = Kd*((error-previous_error) / cycle_time);
 
-  int pid = pid_P + pid_I + pid_D;
+  float pid = pid_P + pid_I + pid_D;
   return pid;
 }
 
@@ -113,14 +112,21 @@ void loop()
   getAngle();
   error = targetAngle - pitchAngle; 
   previous_error = error;
-  int pid { calculatePID() };
+  float pid { calculatePID() };
 
-  // Map ena_speed based on PID threshold from -350 to +350 to 0-255 range for analog
-  ena_speed = map(pid, -350, 350, 0, 255); 
+  // Map ena_speed based on PID threshold from -350 to +350 to 0-255 range for analog, cannot exceed bounds
+  ena_speed = map(pid, -450, 450, 0, 255); 
+  if (ena_speed >= 255) ena_speed = 255;
+  else if (ena_speed < 0)
+  {
+    ena_speed = abs(ena_speed);
+    if (ena_speed >=255) ena_speed = 255;
+  } 
 
   // Debugging yuh
-  Serial.print("Angle Y reading \t"); Serial.println(pitchAngle);
-  Serial.print("Angle X reading \t"); Serial.println(yawAngle);
+  //Serial.print("Angle Y reading \t"); Serial.println(pitchAngle);
+  //Serial.print("Angle X reading \t"); Serial.println(yawAngle);
+  Serial.print("Speed \t"); Serial.println(ena_speed);
   Serial.print("PID \t"); Serial.println(pid);
 
   Serial.print("Ellapsed Time (s) \t"); Serial.println(program_time/1000);
@@ -129,6 +135,6 @@ void loop()
   if (pid < -5) driveForward(ena_speed); 
   else if (pid > 5) driveBackwards(ena_speed);
   else halt();
-
-  delay(200);
+  
+  delay(2); 
 }
