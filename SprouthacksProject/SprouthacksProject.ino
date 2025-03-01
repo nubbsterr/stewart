@@ -10,9 +10,9 @@
 /* PID and Accelerometer
  * INT, SCL, SDA are all handled by GY521.h lib. Pinout is predefined w/ macros in lib header. */
 GY521 mpu(0x68);                        // Create sensor object for GY521 lib interface
-const float Kp { 25 };                  // Proportional-Gain constant for PID
-const float Ki { 1 };                   // Integral-Gain constant for PID
-const float Kd { 0.00001 };             // Derivative-Gain constant for PID
+const float Kp { 5000 };                 // Proportional-Gain constant for PID
+const float Ki { 0.001 };                   // Integral-Gain constant for PID
+const float Kd { 0.005 };              // Derivative-Gain constant for PID
 int pid_I { 0 };                        // Integral value for PID, global to get integral total
 int error { 0 };                        // Error = SP - PV, manipulate output to get closer to SP
 int previous_error { 0 };               // Used for Derivative calculation
@@ -69,8 +69,8 @@ void setup() {
   }
 
   // Set sensor sensitivity, calibrate MPU and normalize angle return
-  mpu.setAccelSensitivity(2);    // 8g of force max
-  mpu.setGyroSensitivity(1);     // 500 degreees/second max
+  mpu.setAccelSensitivity(3);    // 16g of force max
+  mpu.setGyroSensitivity(2);     // 1000 degreees/second max
   mpu.setNormalize(true);        
   mpu.calibrate(20);             
 }
@@ -87,7 +87,7 @@ float calculatePID()
 
   /* D controlled by rate of change of error, aims to predict change of process value to correct movement, 
    * biases output to prevent overcorrection */
-  float pid_D = Kd*((error-previous_error) / cycle_time);
+  float pid_D = Kd*((error-previous_error) / 20);
 
   float pid = pid_P + pid_I + pid_D;
   return pid;
@@ -108,6 +108,12 @@ void loop()
   previous_time = program_time; // last recorded time
   program_time = millis();      // millis records time since program start
   cycle_time = program_time - previous_time; 
+  
+  if (cycle_time <= 20)
+  {
+    cycle_time = 20 - cycle_time;
+    delay(cycle_time);
+  }
 
   getAngle();
   error = targetAngle - pitchAngle; 
@@ -115,7 +121,7 @@ void loop()
   float pid { calculatePID() };
 
   // Map ena_speed based on PID threshold from -350 to +350 to 0-255 range for analog, cannot exceed bounds
-  ena_speed = map(pid, -450, 450, 0, 255); 
+  ena_speed = map(pid, -150, 150, 0, 255); 
   if (ena_speed >= 255) ena_speed = 255;
   else if (ena_speed < 0)
   {
@@ -130,11 +136,10 @@ void loop()
   Serial.print("PID \t"); Serial.println(pid);
 
   Serial.print("Ellapsed Time (s) \t"); Serial.println(program_time/1000);
+  Serial.print("Cycle Time (ms) \t"); Serial.println(cycle_time);
 
   // Control robot movement based on PID
   if (pid < -5) driveForward(ena_speed); 
   else if (pid > 5) driveBackwards(ena_speed);
   else halt();
-  
-  delay(2); 
 }
