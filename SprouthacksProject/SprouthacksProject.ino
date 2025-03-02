@@ -10,9 +10,9 @@
 /* PID and Accelerometer
  * INT, SCL, SDA are all handled by GY521.h lib. Pinout is predefined w/ macros in lib header. */
 GY521 mpu(0x68);                        // Create sensor object for GY521 lib interface
-const float Kp { 5000 };                 // Proportional-Gain constant for PID
+const float Kp { 4000 };                 // Proportional-Gain constant for PID, immense immediate correction
 const float Ki { 0.001 };                   // Integral-Gain constant for PID
-const float Kd { 0.005 };              // Derivative-Gain constant for PID
+const float Kd { 0.4 };              // Derivative-Gain constant for PID
 int pid_I { 0 };                        // Integral value for PID, global to get integral total
 int error { 0 };                        // Error = SP - PV, manipulate output to get closer to SP
 int previous_error { 0 };               // Used for Derivative calculation
