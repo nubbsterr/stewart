@@ -1,18 +1,12 @@
-/* TO-DO:
- * tune PID to lessen overcorrection by robot
- * speed map w/ PID: -350 to +350
- * pitch deck for project can be ultra shrimple; show project purpose, design, issues in development, etc.
-*/
-
 // Lib include
 #include <GY521.h> // Read MPU6050 data using Wire.h, return angle values for PID calculation
 
 /* PID and Accelerometer
  * INT, SCL, SDA are all handled by GY521.h lib. Pinout is predefined w/ macros in lib header. */
 GY521 mpu(0x68);                        // Create sensor object for GY521 lib interface
-const float Kp { 4000 };                 // Proportional-Gain constant for PID, immense immediate correction
-const float Ki { 0.001 };                   // Integral-Gain constant for PID
-const float Kd { 0.4 };              // Derivative-Gain constant for PID
+const float Kp { 5000 };                 // Proportional-Gain constant for PID, immense immediate correction
+const float Ki { 0.001 };                   // Inte65gral-Gain constant for PID
+const float Kd { 0.005 };              // Derivative-Gain constant for PID
 int pid_I { 0 };                        // Integral value for PID, global to get integral total
 int error { 0 };                        // Error = SP - PV, manipulate output to get closer to SP
 int previous_error { 0 };               // Used for Derivative calculation
@@ -72,7 +66,7 @@ void setup() {
   mpu.setAccelSensitivity(3);    // 16g of force max
   mpu.setGyroSensitivity(2);     // 1000 degreees/second max
   mpu.setNormalize(true);        
-  mpu.calibrate(20);             
+  mpu.calibrate(50);             
 }
 
 // Calculate PID using linear models since exponential is too hard/process demanding
@@ -128,15 +122,6 @@ void loop()
     ena_speed = abs(ena_speed);
     if (ena_speed >=255) ena_speed = 255;
   } 
-
-  // Debugging yuh
-  //Serial.print("Angle Y reading \t"); Serial.println(pitchAngle);
-  //Serial.print("Angle X reading \t"); Serial.println(yawAngle);
-  Serial.print("Speed \t"); Serial.println(ena_speed);
-  Serial.print("PID \t"); Serial.println(pid);
-
-  Serial.print("Ellapsed Time (s) \t"); Serial.println(program_time/1000);
-  Serial.print("Cycle Time (ms) \t"); Serial.println(cycle_time);
 
   // Control robot movement based on PID
   if (pid < -5) driveForward(ena_speed); 
