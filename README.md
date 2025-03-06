@@ -1,6 +1,9 @@
 # stewart
 A self-balancing robot project developed at SproutHacks 2025 over a total of ~12-13 hours.
 
+## Post SproutHacks Briefing
+Stewart didn't win anything but he will forever live in my heart as a learning experience that I enjoyed nicely. <a href="https://devpost.com/software/stewart?_gl=1*iwpoki*_gcl_au*MjEzNDczMTM5LjE3NDEyODY2ODU.*_ga*OTcxMzIyMjc4LjE3NDEyODY2ODY.*_ga_0YHJK3Y10M*MTc0MTI4NjY4NS4xLjEuMTc0MTI4NjY5MS4wLjAuMA..">Here is the Devpost link to our project!</a>
+
 ## Project Info
 <strong>Stewart</strong> is a self-balancing robot made using an ESP32 with a programmed <strong>PID controller</strong>, <strong>a pizza box</strong> for a base, and <strong>LOADS of tape</strong>.
 
